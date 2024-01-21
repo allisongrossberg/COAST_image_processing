@@ -1,22 +1,24 @@
 import os
 
-from ij import IJ, WindowManager
+from ij import IJ, WindowManager, macro
 from ij.plugin.frame import RoiManager  
 
+macro.Interpreter.batchMode = True
 
-
-# IJ.log("Hello, ImageJ!")
 # Set input and output folders
 input = "/Users/allisongrossberg/Desktop/Test_Input_Folder/"
 output = "/Users/allisongrossberg/Desktop/Test_Output_Folder/"
+um_to_pix = "0.311"
 # Get list of files
 all_files = os.listdir(input)
 files = [file for file in all_files if file.endswith(".oir")]
 
 DEFAULT_OPTIONS = "open=[Bio-Formats] color_mode=Default view=Hyperstack"
 COMPOSITE_OPTIONS = "open=[Bio-Formats] color_mode=Composite view=Hyperstack"
-#remove the first member of the files list
-files.pop(0)
+# get the first two members of files
+# files = files[:2]
+
+fail_dict = {}
 for file in files:
     IJ.run("Bio-Formats Importer", "open=[" + input + file + "]" + DEFAULT_OPTIONS)
 
@@ -26,7 +28,7 @@ for file in files:
     originalFilePath = input + originalFileName
     
     # #######DAPI Count 
-    IJ.run("Set Scale...", "distance=1 known=0.311 unit=micron global")
+    IJ.run("Set Scale...", "distance=1 known={0} unit=micron global".format(um_to_pix))
 
     # Split Channels
     IJ.selectWindow(originalFileName)
@@ -62,7 +64,7 @@ for file in files:
 
     # Initial Measurements
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=10.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=20.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Get the number of ROIs in the ROI manager
@@ -99,16 +101,17 @@ for file in files:
     IJ.run("Clear Results")
 
     # Save ROIs
-    rm.setSelectedIndexes(indexes)
-    IJ.runMacro("""roiManager("Add")""")
-    rm.runCommand("Save", output + originalFileNameWithoutExtension + "-DAPI_RoiSet.zip")
+    if nROIs > 0:
+        rm.setSelectedIndexes(indexes)
+        IJ.runMacro("""roiManager("Add")""")
+        rm.runCommand("Save", output + originalFileNameWithoutExtension + "-DAPI_RoiSet.zip")
 
     # Save the non-duplicated image as TIFF with the overlay
     IJ.selectWindow(blueChannelName)
     IJ.saveAs(imp, "Tiff", output + originalFileName)
 
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_C1-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=10.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=20.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Save the results to a different CSV file
@@ -122,7 +125,7 @@ for file in files:
     #reset the ROI manager
     rm.reset()
 
-    # Duplicating GFAP Channels for Downstream Analysis
+    # ####### GFAP Channel Duplication #######
     # Select the GFAP channel (assuming it's the green channel)
     IJ.selectWindow(greenChannelName)
     
@@ -169,7 +172,7 @@ for file in files:
     IJ.run("Duplicate...", "title=" + duplicateTitle6)
 
     ######### Mean Flourescence Intensity (MFI) for Green Channel
-			
+            
     # Select the first duplicate
     IJ.selectWindow(duplicateTitle)
     # Increase brightness/contrast of the non-duplicated image with normalization
@@ -199,7 +202,7 @@ for file in files:
     IJ.run("Clear Results")
 
     ######### Mean Flourescence Intensity (MFI) for Red Channel 
-			
+            
     # Select the Vimentin channel (assuming it's the red channel)
     IJ.selectWindow(redChannelName)
     # Specify the name for the duplicated image
@@ -240,7 +243,7 @@ for file in files:
     IJ.run("Clear Results")
 
     ######### Cell Area Measurements - GFAP 
-			
+            
     # Select the second duplicate of the green channel
     IJ.selectWindow(duplicateTitle3)
     imp = IJ.getImage()
@@ -262,9 +265,9 @@ for file in files:
     IJ.run("Gaussian Blur...", "sigma=1")
     
     # Threshold and Convert to Mask
-    # minThresholdValue = 150
+    minThresholdValue = 150
     IJ.setAutoThreshold(imp, "MaxEntropy dark no-reset")
-    # IJ.setThreshold(minThresholdValue, 255)
+    IJ.setThreshold(minThresholdValue, 255)
     IJ.runMacro("""setOption("BlackBackground", true)""")
 
     IJ.run("Convert to Mask")
@@ -277,15 +280,13 @@ for file in files:
     IJ.run("Close-")
     
     IJ.run("Set Measurements...", "area mean standard min perimeter shape integrated skewness limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=60.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=80.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
     
     # Get the number of ROIs in the ROI Manager
     rm = RoiManager.getInstance()
     nROIs = rm.getCount()
-    print(nROIs)
     indexes = range(0, nROIs+1)
-    print(indexes)
     
     # Fill the array with ROI indices
     # Add image name to results table
@@ -305,16 +306,17 @@ for file in files:
     IJ.run("Clear Results")
     
     # Save ROIs
-    rm.setSelectedIndexes(indexes)
-    IJ.runMacro("""roiManager("Add")""")
-    rm.runCommand("Save", output + originalFileNameWithoutExtension + "-GFAP_RoiSet.zip")
+    if nROIs > 0:
+        rm.setSelectedIndexes(indexes)
+        IJ.runMacro("""roiManager("Add")""")
+        rm.runCommand("Save", output + originalFileNameWithoutExtension + "-GFAP_RoiSet.zip")
 
     # Save the non-duplicated original image as TIFF with the overlay
     IJ.selectWindow(duplicateTitle3)
     IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-greenChannel_with_ROI.tif")
     
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_4_C2-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=60.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=80.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
 
     # Save the results to a different CSV file (replace with your desired file path)
@@ -395,7 +397,7 @@ for file in files:
     IJ.run("Close All")
     # Tables
     window_list = WindowManager.getNonImageWindows()
-    # print(window_list[1].title)
+
     for window in window_list:
         IJ.selectWindow(window.title)
         IJ.run("Close")
