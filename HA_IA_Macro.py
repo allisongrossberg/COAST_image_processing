@@ -1,9 +1,9 @@
 import os
 
-from ij import IJ, WindowManager, macro
+from ij import IJ, WindowManager, macro, CompositeImage
 from ij.plugin.frame import RoiManager  
 
-macro.Interpreter.batchMode = True
+macro.Interpreter.batchMode = False
 
 # Set input and output folders
 input = "/Users/allisongrossberg/Desktop/Test_Input_Folder/"
@@ -32,8 +32,14 @@ for file in files:
 
     # Split Channels
     IJ.selectWindow(originalFileName)
-    IJ.run("Split Channels")
+    imp = IJ.getImage()
 
+
+    n_channels = imp.getNChannels()
+    if n_channels == 4:
+        IJ.run("Arrange Channels...", "new=1243")
+    IJ.run("Split Channels")
+    
     # Specify the names for each channel
     blueChannelName = "C1-" + originalFileName
     greenChannelName = "C2-" + originalFileName
@@ -64,7 +70,7 @@ for file in files:
 
     # Initial Measurements
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=20.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Get the number of ROIs in the ROI manager
@@ -79,16 +85,20 @@ for file in files:
     # Open the Image as a Composite
     IJ.run("Bio-Formats Importer", "open=[" + input + file + "]" + COMPOSITE_OPTIONS)
 
-    # Create a composite image with the GFAP ROI overlay on all three channels
+    # Create a composite image with the DAPI ROI overlay on all three channels
     IJ.selectWindow(originalFileName)
     imp = IJ.getImage()
     rm = RoiManager.getInstance()
     IJ.run("Colors...", "channels=1 slices")
     rm.runCommand(imp, "Show All")
+
     IJ.run("Make Composite")
 
+    if n_channels == 4:
+        IJ.runMacro("""Stack.toggleChannel(3)""")
+
     # Save the composite image as TIFF with the overlay
-    IJ.saveAs(imp, "Tiff", output + originalFileName)
+    IJ.saveAs(imp, "Tiff", output + originalFileNameWithoutExtension + "-DAPI_ROI_Composite.tif")
 
     # Save the results to a csv file
     IJ.saveAs("Results", output + originalFileNameWithoutExtension + "-DAPI_Count_Results.csv")
@@ -111,7 +121,7 @@ for file in files:
     IJ.saveAs(imp, "Tiff", output + originalFileName)
 
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_C1-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=20.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Save the results to a different CSV file
@@ -121,6 +131,33 @@ for file in files:
 
     IJ.saveAs("Results", output + originalFileNameWithoutExtension + "-DAPI_Duplicate_Image_Results.csv")
     IJ.run("Clear Results")
+
+    if n_channels == 4:
+        nfkbChannelName = "C4-" + originalFileName
+
+        # Save the non-duplicated image as TIFF with the overlay
+        IJ.selectWindow(blueChannelName)
+        IJ.run("Set Measurements...", "mean standard min max limit redirect=[C4-" + originalFileName + "] decimal=2")
+        IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+        IJ.run("Measure")
+
+        # Save the results to a different CSV file
+        IJ.selectWindow("Results")
+        for i in indexes:
+            IJ.runMacro('setResult("Image File", {0}, "C4-" + "{1}" + "")'.format(i, originalFileName))
+        IJ.saveAs("Results", output + originalFileNameWithoutExtension + "-NFkB_Results.csv")
+        IJ.run("Clear Results")
+        
+        IJ.run("Bio-Formats Importer", "open=[" + input + file + "]" + COMPOSITE_OPTIONS)
+
+        IJ.selectWindow(originalFileName)
+        imp = IJ.getImage()
+        rm = RoiManager.getInstance()
+        IJ.run("Colors...", "channels=1 slices")
+        rm.runCommand(imp, "Show All")
+        IJ.run("Make Composite")
+        IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-NFkB_Composite_Image_With_ROI.tif")
+
 
     #reset the ROI manager
     rm.reset()
@@ -265,22 +302,26 @@ for file in files:
     IJ.run("Gaussian Blur...", "sigma=1")
     
     # Threshold and Convert to Mask
-    minThresholdValue = 150
+    #minThresholdValue = 100
     IJ.setAutoThreshold(imp, "MaxEntropy dark no-reset")
-    IJ.setThreshold(minThresholdValue, 255)
+    #IJ.setThreshold(minThresholdValue, 4095)
     IJ.runMacro("""setOption("BlackBackground", true)""")
 
     IJ.run("Convert to Mask")
     IJ.run("Despeckle")
     IJ.run("Close-")
     IJ.run("Dilate")
+    IJ.run("Fill Holes")
     IJ.run("Watershed")
     # Post-processing
     IJ.run("Fill Holes")
+    IJ.run("Dilate")
+    IJ.run("Dilate")
     IJ.run("Close-")
+    IJ.run("Despeckle")
     
     IJ.run("Set Measurements...", "area mean standard min perimeter shape integrated skewness limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=80.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=85.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
     
     # Get the number of ROIs in the ROI Manager
@@ -316,7 +357,7 @@ for file in files:
     IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-greenChannel_with_ROI.tif")
     
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_4_C2-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=80.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=85.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
 
     # Save the results to a different CSV file (replace with your desired file path)
@@ -340,6 +381,9 @@ for file in files:
     IJ.run("Colors...", "channels=1 slices")
     rm.runCommand(imp, "Show All")
     IJ.run("Make Composite")
+
+    if n_channels == 4:
+        IJ.runMacro("""Stack.toggleChannel(3)""")
 
     # Save the composite image as TIFF with the overlay
     IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-GFAP_Composite_Image_With_ROI.tif")
@@ -387,11 +431,11 @@ for file in files:
     IJ.run("8-bit")
     skelestring = " c2=" + originalFileNameWithoutExtension + "-Tagged_Skeletons.tif create"
     IJ.run("Merge Channels...", "c1=duplicate_6_C2-" + originalFileName + skelestring)
+
     IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-GFAP_Tagged_Skeletons_Overlay.tif")
     
     # Clear the results Table
     IJ.run("Clear Results")
-
     # Clear All Windows 
     # Images
     IJ.run("Close All")
