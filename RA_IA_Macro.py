@@ -6,16 +6,21 @@ from ij.plugin.frame import RoiManager
 macro.Interpreter.batchMode = False
 
 # Set input and output folders
-input = "/Volumes/Extreme Pro/Image_Analysis_Input_3_18_24_COAST_HA_40x_TLR_Exp_Pooled_ADEs_February_3_24_New_COV_Images/"
-output = "/Volumes/Extreme Pro/Image_Analysis_Ouput_3_18_24_COAST_HA_40x_TLR_Exp_Pooled_ADEs_February_3_24_New_COV_Images/"
-um_to_pix = "0.311"
+input = "/Volumes/Extreme Pro/ones_that_did_not_run/"
+output = "/Volumes/Extreme Pro/Image_Analysis_Output_3_17_24_COAST_RA_60x_Ind_ADE_24hrs_September_9_23/"
+um_to_pix = "0.207"
 # Get list of files
 all_files = os.listdir(input)
 files = [file for file in all_files if file.endswith(".oir")]
 files = sorted(files)
 
+#get first 10 files
+#files = files[:10]
+
 DEFAULT_OPTIONS = "open=[Bio-Formats] color_mode=Default view=Hyperstack"
 COMPOSITE_OPTIONS = "open=[Bio-Formats] color_mode=Composite view=Hyperstack"
+
+no_cells_detected_list = []
 
 fail_dict = {}
 for file in files:
@@ -33,7 +38,6 @@ for file in files:
     # Split Channels
     IJ.selectWindow(originalFileName)
     imp = IJ.getImage()
-
 
     n_channels = imp.getNChannels()
     if n_channels == 4:
@@ -59,9 +63,9 @@ for file in files:
     imp = IJ.getImage()
     
     # Preprocess the image with Gaussian Blur
-    IJ.run("Gaussian Blur...", "sigma=2")
-    IJ.run("Gamma...", "value=0.5")
-    IJ.run("Max...", "value=1500")
+    #IJ.run("Gaussian Blur...", "sigma=2")
+    IJ.run("Gamma...", "value=0.7")
+    IJ.run("Max...", "value=2000")
 
     IJ.setAutoThreshold(imp, "Default dark no-reset")
     IJ.runMacro("""setOption("BlackBackground", true)""")
@@ -70,12 +74,16 @@ for file in files:
 
     # Initial Measurements
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=10.00-Infinity circularity=0.15-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Get the number of ROIs in the ROI manager
     rm = RoiManager.getInstance()
-    nROIs = rm.getCount()
+    try:
+        nROIs = rm.getCount()
+    except AttributeError:
+        no_cells_detected_list.append(originalFileName)
+        continue
     indexes = range(0, nROIs+1)
     # Add image name to results table
     IJ.selectWindow("Results")
@@ -121,7 +129,7 @@ for file in files:
     IJ.saveAs(imp, "Tiff", output + originalFileName)
 
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_C1-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+    IJ.run("Analyze Particles...", "size=10.00-Infinity circularity=0.15-1.00 show=Outlines display summarize overlay composite add")
     IJ.run("Measure")
 
     # Save the results to a different CSV file
@@ -138,7 +146,7 @@ for file in files:
         # Save the non-duplicated image as TIFF with the overlay
         IJ.selectWindow(blueChannelName)
         IJ.run("Set Measurements...", "mean standard min max limit redirect=[C4-" + originalFileName + "] decimal=2")
-        IJ.run("Analyze Particles...", "size=35.00-Infinity circularity=0.50-1.00 show=Outlines display summarize overlay composite add")
+        IJ.run("Analyze Particles...", "size=10.00-Infinity circularity=0.15-1.00 show=Outlines display summarize overlay composite add")
         IJ.run("Measure")
 
         # Save the results to a different CSV file
@@ -216,7 +224,7 @@ for file in files:
     IJ.run("Enhance Contrast...", "saturated=1 normalize")
     
     # Preprocess the image with Gaussian Blur
-    IJ.run("Gaussian Blur...", "sigma=2")
+    #IJ.run("Gaussian Blur...", "sigma=2")
     
     # Remove the backgroung using Rolling Ball Subtraction 
     IJ.run("Subtract Background...", "rolling=50")
@@ -254,7 +262,7 @@ for file in files:
     IJ.run("Enhance Contrast...", "saturated=1 normalize")
 
     # Preprocess the image with Gaussian Blur
-    IJ.run("Gaussian Blur...", "sigma=2")
+    #IJ.run("Gaussian Blur...", "sigma=2")
     
     # Remove the backgroung using Rolling Ball Subtraction 
     IJ.run("Subtract Background...", "rolling=50")
@@ -289,7 +297,7 @@ for file in files:
     IJ.run("Enhance Contrast...", "saturated=0 normalize")
                 
     # Preprocess the image with Gaussian Blur
-    IJ.run("Gaussian Blur...", "sigma=8")
+    #IJ.run("Gaussian Blur...", "sigma=8")
     
     # Remove the background using Rolling Ball Subtraction 
     IJ.run("Subtract Background...", "rolling=52")
@@ -321,7 +329,7 @@ for file in files:
     IJ.run("Despeckle")
     
     IJ.run("Set Measurements...", "area mean standard min perimeter shape integrated skewness limit redirect=[None] decimal=2")
-    IJ.run("Analyze Particles...", "size=85.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=30.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
     
     # Get the number of ROIs in the ROI Manager
@@ -357,7 +365,7 @@ for file in files:
     IJ.saveAs("Tiff", output + originalFileNameWithoutExtension + "-greenChannel_with_ROI.tif")
     
     IJ.run("Set Measurements...", "area mean standard min max perimeter shape limit redirect=[duplicate_4_C2-" + originalFileName + "] decimal=2")
-    IJ.run("Analyze Particles...", "size=85.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
+    IJ.run("Analyze Particles...", "size=30.00-Infinity circularity=0.00-1.00 show=Outlines display summarize overlay add composite")
     IJ.run("Measure")
     if nROIs == 1:
         IJ.runMacro('setResult("Area", 0, 0)')
@@ -459,3 +467,9 @@ for file in files:
         IJ.run("Close")
 
     print("Processing Complete For File: {0}".format(file))
+
+if no_cells_detected_list:
+    #write no cells detected to a file
+    with open(output + "no_cells_detected.txt", "w") as f:
+        for item in no_cells_detected_list:
+            f.write("%s\n" % item)
